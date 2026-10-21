@@ -1,0 +1,60 @@
+name: Build AbiWord 32-bit (i686)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/abiword-i686.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Set up MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MSYS
+          update: true
+          install: >-
+            git
+            base-devel
+            patch
+            make
+            tar
+            unzip
+
+      - name: Checkout MSYS2 packaging repository
+        uses: actions/checkout@v5
+        with:
+          repository: msys2/MINGW-packages
+          path: MINGW-packages
+
+      - name: Enable experimental MINGW32 target
+        shell: msys2 {0}
+        run: |
+          cd MINGW-packages/mingw-w64-abiword
+
+          sed -i "s/mingw_arch=('ucrt64' 'clang64' 'clangarm64')/mingw_arch=('mingw32' 'ucrt64' 'clang64' 'clangarm64')/" PKGBUILD
+
+          grep '^mingw_arch=' PKGBUILD
+
+      - name: Build AbiWord package
+        shell: msys2 {0}
+        run: |
+          export MSYSTEM=MINGW32
+          export CHERE_INVOKING=1
+          cd MINGW-packages/mingw-w64-abiword
+
+          makepkg-mingw --syncdeps --cleanbuild --force --noconfirm
+
+      - name: Upload package
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: abiword-i686-package
+          path: MINGW-packages/mingw-w64-abiword/*.pkg.tar.*
+          if-no-files-found: error
