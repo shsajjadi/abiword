@@ -19,8 +19,8 @@ jobs:
       - name: Build AbiWord
         shell: cmd
         run: |
-          # 1. Install toolchain and dependencies
-          "C:\msys64\msys2_shell.cmd" -mingw32 -c "pacman -Syu --noconfirm && pacman -S --noconfirm base-devel mingw-w64-i686-toolchain zstd wget patch mingw-w64-i686-enchant mingw-w64-i686-fribidi mingw-w64-i686-glib2 mingw-w64-i686-libgcrypt mingw-w64-i686-libgda mingw-w64-i686-libgsf mingw-w64-i686-libical mingw-w64-i686-libjpeg-turbo mingw-w64-i686-libpng mingw-w64-i686-librevenge mingw-w64-i686-libwmf mingw-w64-i686-libwpg mingw-w64-i686-libwps mingw-w64-i686-libxml2 mingw-w64-i686-libxslt mingw-w64-i686-redland mingw-w64-i686-wv mingw-w64-i686-zlib"
+          # 1. Install Base Tools, Build-time Dependencies, and Runtime Dependencies
+          "C:\msys64\msys2_shell.cmd" -mingw32 -c "pacman -Syu --noconfirm && pacman -S --noconfirm base-devel autoconf-archive zstd wget patch mingw-w64-i686-toolchain mingw-w64-i686-asio mingw-w64-i686-autotools mingw-w64-i686-boost mingw-w64-i686-enchant mingw-w64-i686-fribidi mingw-w64-i686-glib2 mingw-w64-i686-libgcrypt mingw-w64-i686-libgda mingw-w64-i686-libgsf mingw-w64-i686-libical mingw-w64-i686-libjpeg-turbo mingw-w64-i686-libpng mingw-w64-i686-librevenge mingw-w64-i686-libwmf mingw-w64-i686-libwpg mingw-w64-i686-libwps mingw-w64-i686-libxml2 mingw-w64-i686-libxslt mingw-w64-i686-redland mingw-w64-i686-wv mingw-w64-i686-zlib"
           
           # 2. Download and extract the MSYS2 source bundle
           "C:\msys64\msys2_shell.cmd" -mingw32 -c "wget https://mirror.msys2.org/mingw/sources/mingw-w64-abiword-3.0.8-1.src.tar.zst && tar -I zstd -xvf mingw-w64-abiword-3.0.8-1.src.tar.zst"
