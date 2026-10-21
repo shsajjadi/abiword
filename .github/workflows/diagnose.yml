@@ -56,7 +56,7 @@ jobs:
           gcc --version
           g++ --version
           make --version
-          pacman --repo-list
+          pacman-conf --repo-list
 
       - name: Check and install AbiWord dependencies
         run: |
