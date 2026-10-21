@@ -59,13 +59,13 @@ jobs:
           pacman-conf --repo-list
 
       - name: Search available MINGW32 dependencies
-            run: |
-              set -eu
+        run: |
+          set -eu
 
-              for name in asio boost enchant fribidi gcrypt gda gsf ical; do
-                echo "========== $name =========="
-                pacman -Ss "$name" || true
-              done
+          for name in asio boost enchant fribidi gcrypt gda gsf ical; do
+            echo "========== $name =========="
+            pacman -Ss "$name" || true
+          done
           
       - name: Check and install AbiWord dependencies
         run: |
