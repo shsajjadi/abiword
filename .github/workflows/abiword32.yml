@@ -18,9 +18,7 @@ jobs:
 
       - name: Update MSYS2 Core
         shell: cmd
-        run: |
-          set MSYSTEM=MSYS
-          C:\msys64\usr\bin\bash.exe -lc "pacman -Syu --noconfirm"
+        run: set MSYSTEM=MSYS && C:\msys64\usr\bin\bash.exe -lc "pacman -Syu --noconfirm"
 
       - name: Install Build Tools and Toolchain
         shell: cmd
@@ -32,34 +30,13 @@ jobs:
         shell: cmd
         run: |
           set MSYSTEM=MINGW32
-          C:\msys64\usr\bin\bash.exe -lc "
-          libs='mingw-w64-i686-asio mingw-w64-i686-autotools mingw-w64-i686-boost mingw-w64-i686-enchant mingw-w64-i686-fribidi mingw-w64-i686-glib2 mingw-w64-i686-libgcrypt mingw-w64-i686-libgda mingw-w64-i686-libgsf mingw-w64-i686-libical mingw-w64-i686-libjpeg-turbo mingw-w64-i686-libpng mingw-w64-i686-libxml2 mingw-w64-i686-libxslt mingw-w64-i686-zlib';
-          for pkg in \$libs; do
-            echo \"Installing \$pkg...\";
-            pacman -S --noconfirm --needed \$pkg || echo \"Warning: \$pkg not found, skipping.\";
-          done"
+          C:\msys64\usr\bin\bash.exe -lc "libs='mingw-w64-i686-asio mingw-w64-i686-autotools mingw-w64-i686-boost mingw-w64-i686-enchant mingw-w64-i686-fribidi mingw-w64-i686-glib2 mingw-w64-i686-libgcrypt mingw-w64-i686-libgda mingw-w64-i686-libgsf mingw-w64-i686-libical mingw-w64-i686-libjpeg-turbo mingw-w64-i686-libpng mingw-w64-i686-libxml2 mingw-w64-i686-libxslt mingw-w64-i686-zlib'; for pkg in $libs; do echo \"Installing $pkg...\"; pacman -S --noconfirm --needed $pkg || echo \"Warning: $pkg not found, skipping.\"; done"
 
       - name: Build AbiWord
         shell: cmd
         run: |
           set MSYSTEM=MINGW32
-          C:\msys64\usr\bin\bash.exe -lc "set -e; 
-          wget https://mirror.msys2.org/mingw/sources/mingw-w64-abiword-3.0.8-1.src.tar.zst; 
-          tar -I zstd -xvf mingw-w64-abiword-3.0.8-1.src.tar.zst; 
-          cd mingw-w64-abiword; 
-          tar -xvf AbiWord-release-3.0.8.tar.bz2; 
-          cd AbiWord-release-3.0.8; 
-          for p in ../*.patch; do [[ \"$p\" == *\"clang\"* ]] && continue; echo \"Applying $p\"; patch -Nbp1 -i \"$p\"; done; 
-          ./autogen-common.sh; 
-          autoreconf -fiv; 
-          mkdir -p build-MINGW32 && cd build-MINGW32; 
-          export PKG_CONFIG_PATH='/mingw32/lib/pkgconfig'; 
-          export lt_cv_deplibs_check_method='pass_all'; 
-          export CXXFLAGS='-w -DWIN32'; 
-          export LDFLAGS='-lpthread'; 
-          ../configure --host=i686-w64-mingw32 --prefix=/mingw32 --enable-shared --enable-plugins --enable-clipart --enable-templates; 
-          make -j$(nproc); 
-          make install"
+          C:\msys64\usr\bin\bash.exe -lc "set -e; wget https://mirror.msys2.org/mingw/sources/mingw-w64-abiword-3.0.8-1.src.tar.zst; tar -I zstd -xvf mingw-w64-abiword-3.0.8-1.src.tar.zst; cd mingw-w64-abiword; tar -xvf AbiWord-release-3.0.8.tar.bz2; cd AbiWord-release-3.0.8; for p in ../*.patch; do [[ \"$p\" == *\"clang\"* ]] && continue; echo \"Applying $p\"; patch -Nbp1 -i \"$p\"; done; ./autogen-common.sh; autoreconf -fiv; mkdir -p build-MINGW32 && cd build-MINGW32; export PKG_CONFIG_PATH='/mingw32/lib/pkgconfig'; export lt_cv_deplibs_check_method='pass_all'; export CXXFLAGS='-w -DWIN32'; export LDFLAGS='-lpthread'; ../configure --host=i686-w64-mingw32 --prefix=/mingw32 --enable-shared --enable-plugins --enable-clipart --enable-templates; make -j$(nproc); make install"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
