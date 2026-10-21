@@ -1,85 +1,32 @@
-name: Build AbiWord 32-bit (i686)
+name: Build AbiWord i686
 
 on:
-  workflow_dispatch:
   push:
-    paths:
-      - ".github/workflows/abiword-i686.yml"
-
-permissions:
-  contents: read
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
-      - name: Set up MSYS2
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: MSYS
-          update: true
-          install: >-
-            git
-            base-devel
-            patch
-            make
-            tar
-            unzip
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Checkout MSYS2 packaging repository
-        uses: actions/checkout@v5
-        with:
-          repository: msys2/MINGW-packages
-          path: MINGW-packages
+      - name: Install MSYS2
+        run: choco install msys2 -y
 
-      - name: Enable experimental MINGW32 target
-        shell: msys2 {0}
+      - name: Build AbiWord
+        shell: cmd
         run: |
-          cd MINGW-packages/mingw-w64-abiword
+          # 1. Update and install the i686 toolchain and translated dependencies
+          "C:\msys64\msys2_shell.cmd" -mingw32 -c "pacman -Syu --noconfirm && pacman -S --noconfirm base-devel mingw-w64-i686-toolchain mingw-w64-i686-enchant mingw-w64-i686-fribidi mingw-w64-i686-glib2 mingw-w64-i686-libgcrypt mingw-w64-i686-libgda mingw-w64-i686-libgsf mingw-w64-i686-libical mingw-w64-i686-libjpeg-turbo mingw-w64-i686-libpng mingw-w64-i686-librevenge mingw-w64-i686-libwmf mingw-w64-i686-libwpg mingw-w64-i686-libwps mingw-w64-i686-libxml2 mingw-w64-i686-libxslt mingw-w64-i686-redland mingw-w64-i686-wv mingw-w64-i686-zlib"
+          
+          # 2. Configure and build
+          "C:\msys64\msys2_shell.cmd" -mingw32 -c "mkdir -p build && cd build && ../configure --host=i686-w64-mingw32 --prefix=/mingw32 && make -j$(nproc) && make install"
 
-          sed -i "s/mingw_arch=('ucrt64' 'clang64' 'clangarm64')/mingw_arch=('mingw32' 'ucrt64' 'clang64' 'clangarm64')/" PKGBUILD
-
-          grep '^mingw_arch=' PKGBUILD
-
-      - name: Diagnose MINGW32 package availability
-        shell: msys2 {0}
-        run: |
-          pacman -Syy
-
-          echo "=== Enabled repositories ==="
-          cat /etc/pacman.conf
-
-          echo "=== MINGW32 repository packages ==="
-          pacman -Sl mingw32
-
-          echo "=== Check missing dependencies ==="
-          for p in \
-            mingw-w64-i686-enchant \
-            mingw-w64-i686-boost \
-            mingw-w64-i686-libgda \
-            mingw-w64-i686-libgsf \
-            mingw-w64-i686-libwps
-          do
-            if pacman -Sl mingw32 | grep -q " $p "; then
-              echo "FOUND: $p"
-            else
-              echo "NOT FOUND: $p"
-            fi
-          done
-      - name: Build AbiWord package
-        shell: msys2 {0}
-        run: |
-          export MSYSTEM=MINGW32
-          export CHERE_INVOKING=1
-          cd MINGW-packages/mingw-w64-abiword
-
-          makepkg-mingw --syncdeps --cleanbuild --force --noconfirm
-
-      - name: Upload package
-        if: success()
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: abiword-i686-package
-          path: MINGW-packages/mingw-w64-abiword/*.pkg.tar.*
-          if-no-files-found: error
+          name: abiword-i686-binaries
+          path: C:\msys64\mingw32\bin\abiword*
