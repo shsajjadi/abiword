@@ -1,0 +1,126 @@
+
+name: AbiWord CLANG64 Portable
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/abiword-clang64.yml
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Package AbiWord
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - name: Install AbiWord in CLANG64
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: CLANG64
+          update: true
+          install: >-
+            mingw-w64-clang-x86_64-abiword
+            zip
+
+      - name: Build portable bundle
+        run: |
+          set -euo pipefail
+
+          BUNDLE="$(cygpath -u "$RUNNER_TEMP")/abiword-portable"
+          mkdir -p "$BUNDLE"
+
+          # Include the complete installed CLANG64 prefix.
+          cp -a /clang64/. "$BUNDLE/"
+
+          pacman -Q > "$BUNDLE/packages.txt"
+
+          # Save dependency diagnostics.
+          ldd /clang64/bin/abiword.exe \
+            > "$BUNDLE/dll-dependencies.txt"
+
+          if grep -qi "not found" "$BUNDLE/dll-dependencies.txt"; then
+            cat "$BUNDLE/dll-dependencies.txt"
+            exit 1
+          fi
+
+          # Launcher for normal interactive use.
+          cat > "$BUNDLE/AbiWord.bat" <<'EOF'
+          @echo off
+          setlocal
+          set "ROOT=%~dp0"
+          set "PATH=%ROOT%bin;%PATH%"
+          set "XDG_DATA_DIRS=%ROOT%share"
+          set "GSETTINGS_SCHEMA_DIR=%ROOT%share\glib-2.0\schemas"
+          "%ROOT%bin\abiword.exe" %*
+          EOF
+
+          cd "$BUNDLE"
+          zip -qr \
+            "$(cygpath -u "$RUNNER_TEMP")/abiword-portable.zip" .
+
+      - name: Upload bundle for testing
+        uses: actions/upload-artifact@v4
+        with:
+          name: abiword-staging
+          path: ${{ runner.temp }}/abiword-portable.zip
+          if-no-files-found: error
+          retention-days: 1
+
+  smoke-test:
+    name: Test on Windows without MSYS2
+    needs: package
+    runs-on: windows-latest
+
+    steps:
+      - name: Download candidate bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: abiword-staging
+          path: staging
+
+      - name: Extract and test portable AbiWord
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $zip = Join-Path $PWD 'staging/abiword-portable.zip'
+          $root = Join-Path $PWD 'portable-test'
+
+          Expand-Archive -LiteralPath $zip -DestinationPath $root
+
+          $exe = Join-Path $root 'bin/abiword.exe'
+          if (-not (Test-Path $exe)) {
+            throw "AbiWord executable missing from bundle."
+          }
+
+          # Do not inherit paths from MSYS2 or other toolchains.
+          $env:PATH = "$root\bin;$env:SystemRoot\System32;$env:SystemRoot"
+          $env:XDG_DATA_DIRS = "$root\share"
+          $env:GSETTINGS_SCHEMA_DIR = "$root\share\glib-2.0\schemas"
+
+          # Verify that the executable starts and exits successfully.
+          $output = & $exe --version 2>&1
+          $exitCode = $LASTEXITCODE
+
+          $output | ForEach-Object { Write-Host $_ }
+
+          if ($exitCode -ne 0) {
+            throw "AbiWord --version failed with exit code $exitCode"
+          }
+
+          Write-Host "Portable AbiWord smoke test passed."
+
+      - name: Upload verified portable bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: abiword-clang64-portable-x86_64
+          path: staging/abiword-portable.zip
+          if-no-files-found: error
+          retention-days: 14
