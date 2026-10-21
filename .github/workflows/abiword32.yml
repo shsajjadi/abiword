@@ -16,11 +16,23 @@ jobs:
       - name: Install MSYS2
         run: choco install msys2 -y
 
-      - name: Update and Install Dependencies
+      - name: Update MSYS2 Core
+        shell: cmd
+        run: |
+          set MSYSTEM=MSYS
+          C:\msys64\usr\bin\bash.exe -lc "pacman -Syu --noconfirm"
+
+      - name: Install MSYS Tools
+        shell: cmd
+        run: |
+          set MSYSTEM=MSYS
+          C:\msys64\usr\bin\bash.exe -lc "pacman -Syy --noconfirm && pacman -S --noconfirm --needed base-devel autoconf automake autoconf-archive zstd wget patch bzip2 gettext"
+
+      - name: Install MINGW32 Libraries
         shell: cmd
         run: |
           set MSYSTEM=MINGW32
-          C:\msys64\usr\bin\bash.exe -lc "pacman -Syy --noconfirm && pacman -S --noconfirm --needed base-devel autoconf automake autoconf-archive zstd wget patch bzip2 gettext mingw-w64-i686-toolchain mingw-w64-i686-asio mingw-w64-i686-autotools mingw-w64-i686-boost mingw-w64-i686-enchant mingw-w64-i686-fribidi mingw-w64-i686-glib2 mingw-w64-i686-libgcrypt mingw-w64-i686-libgda mingw-w64-i686-libgsf mingw-w64-i686-libical mingw-w64-i686-libjpeg-turbo mingw-w64-i686-libpng mingw-w64-i686-libxml2 mingw-w64-i686-libxslt mingw-w64-i686-zlib"
+          C:\msys64\usr\bin\bash.exe -lc "pacman -Syy --noconfirm && pacman -S --noconfirm --needed mingw-w64-i686-toolchain mingw-w64-i686-asio mingw-w64-i686-autotools mingw-w64-i686-boost mingw-w64-i686-enchant mingw-w64-i686-fribidi mingw-w64-i686-glib2 mingw-w64-i686-libgcrypt mingw-w64-i686-libgda mingw-w64-i686-libgsf mingw-w64-i686-libical mingw-w64-i686-libjpeg-turbo mingw-w64-i686-libpng mingw-w64-i686-libxml2 mingw-w64-i686-libxslt mingw-w64-i686-zlib"
 
       - name: Build AbiWord
         shell: cmd
