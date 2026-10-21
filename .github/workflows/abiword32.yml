@@ -21,9 +21,10 @@ jobs:
         run: |
           $script = @'
           set -e
-          # 1. Install all toolchain and dependency packages
+          
+          # 1. Install tools - explicitly adding autoconf and automake for autoreconf
           pacman -Syu --noconfirm
-          pacman -S --noconfirm base-devel autoconf-archive zstd wget patch bzip2 gettext \
+          pacman -S --noconfirm base-devel autoconf automake autoconf-archive zstd wget patch bzip2 gettext \
             mingw-w64-i686-toolchain mingw-w64-i686-asio mingw-w64-i686-autotools \
             mingw-w64-i686-boost mingw-w64-i686-enchant mingw-w64-i686-fribidi \
             mingw-w64-i686-glib2 mingw-w64-i686-libgcrypt mingw-w64-i686-libgda \
@@ -39,19 +40,19 @@ jobs:
           tar -xvf AbiWord-release-3.0.8.tar.bz2
           cd AbiWord-release-3.0.8
 
-          # 3. Patching (Skipping clang-specific patch as per PKGBUILD)
+          # 3. Patching - using /usr/bin/patch explicitly to avoid Strawberry Perl conflict
           for p in ../*.patch; do
             if [[ "$p" == *"clang"* ]]; then
               echo "Skipping clang patch $p"
             else
               echo "Applying $p"
-              patch -Nbp1 -i "$p"
+              /usr/bin/patch -Nbp1 -i "$p"
             fi
           done
 
-          # 4. Preparation (Crucial step from PKGBUILD)
+          # 4. Preparation
           ./autogen-common.sh
-          autoreconf -fiv
+          /usr/bin/autoreconf -fiv
 
           # 5. Build configuration
           mkdir -p "build-MINGW32" && cd "build-MINGW32"
@@ -77,7 +78,7 @@ jobs:
         shell: cmd
         run: |
           set MSYSTEM=MINGW32
-          set PATH=C:\msys64\mingw32\bin;C:\msys64\usr\bin;%PATH%
+          set PATH=C:\msys64\usr\bin;C:\msys64\mingw32\bin;%PATH%
           C:\msys64\usr\bin\bash.exe build.sh
 
       - name: Upload Artifact
