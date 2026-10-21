@@ -42,6 +42,31 @@ jobs:
 
           grep '^mingw_arch=' PKGBUILD
 
+      - name: Diagnose MINGW32 package availability
+        shell: msys2 {0}
+        run: |
+          pacman -Syy
+
+          echo "=== Enabled repositories ==="
+          cat /etc/pacman.conf
+
+          echo "=== MINGW32 repository packages ==="
+          pacman -Sl mingw32
+
+          echo "=== Check missing dependencies ==="
+          for p in \
+            mingw-w64-i686-enchant \
+            mingw-w64-i686-boost \
+            mingw-w64-i686-libgda \
+            mingw-w64-i686-libgsf \
+            mingw-w64-i686-libwps
+          do
+            if pacman -Sl mingw32 | grep -q " $p "; then
+              echo "FOUND: $p"
+            else
+              echo "NOT FOUND: $p"
+            fi
+          done
       - name: Build AbiWord package
         shell: msys2 {0}
         run: |
