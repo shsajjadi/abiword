@@ -38,6 +38,7 @@ jobs:
             autoconf
             automake
             autoconf-archive
+            libtool
             gettext
             pkgconf
             mingw-w64-ucrt-x86_64-toolchain
@@ -46,79 +47,128 @@ jobs:
       - name: Verify toolchain
         run: |
           set -euxo pipefail
+
           echo "MSYSTEM=$MSYSTEM"
           echo "MINGW_PREFIX=$MINGW_PREFIX"
+
           test "$MSYSTEM" = UCRT64
           test -x /ucrt64/bin/gcc.exe
           test -x /mingw32/bin/gcc.exe
+          test -x /usr/bin/libtoolize.exe
+
           /mingw32/bin/i686-w64-mingw32-gcc --version
+          /mingw32/bin/i686-w64-mingw32-g++ --version
+          /usr/bin/libtoolize --version
           make --version
           pacman-conf --repo-list
 
-      - name: Install x64 build dependencies
+      - name: Install available i686 dependencies
         run: |
-          set -euxo pipefail
+          set -uo pipefail
+
           packages=(
-            mingw-w64-ucrt-x86_64-asio
-            mingw-w64-ucrt-x86_64-boost
-            mingw-w64-ucrt-x86_64-enchant
-            mingw-w64-ucrt-x86_64-fribidi
-            mingw-w64-ucrt-x86_64-glib2
-            mingw-w64-ucrt-x86_64-libgcrypt
-            mingw-w64-ucrt-x86_64-libgda
-            mingw-w64-ucrt-x86_64-libgsf
-            mingw-w64-ucrt-x86_64-libical
-            mingw-w64-ucrt-x86_64-libjpeg-turbo
-            mingw-w64-ucrt-x86_64-libpng
-            mingw-w64-ucrt-x86_64-libxml2
-            mingw-w64-ucrt-x86_64-libxslt
-            mingw-w64-ucrt-x86_64-zlib
+            mingw-w64-i686-asio
+            mingw-w64-i686-boost
+            mingw-w64-i686-enchant
+            mingw-w64-i686-fribidi
+            mingw-w64-i686-glib2
+            mingw-w64-i686-libgcrypt
+            mingw-w64-i686-libgda
+            mingw-w64-i686-libgsf
+            mingw-w64-i686-libical
+            mingw-w64-i686-libjpeg-turbo
+            mingw-w64-i686-libpng
+            mingw-w64-i686-libxml2
+            mingw-w64-i686-libxslt
+            mingw-w64-i686-zlib
           )
-          pacman -S --needed --noconfirm "${packages[@]}"
+
+          missing=()
+          failed=()
+
+          for pkg in "${packages[@]}"; do
+            echo "::group::Checking $pkg"
+
+            if ! pacman -Si "$pkg" >/dev/null 2>&1; then
+              echo "::warning::Package unavailable: $pkg"
+              missing+=("$pkg")
+            elif ! pacman -S --needed --noconfirm "$pkg"; then
+              echo "::warning::Installation failed: $pkg"
+              failed+=("$pkg")
+            else
+              echo "Installed or already present: $pkg"
+            fi
+
+            echo "::endgroup::"
+          done
+
+          printf '%s\n' "${missing[@]}" > missing-packages.txt
+          printf '%s\n' "${failed[@]}" > failed-packages.txt
+
+          echo "Unavailable packages: ${#missing[@]}"
+          echo "Failed installations: ${#failed[@]}"
 
       - name: Download and extract AbiWord source package
         run: |
           set -euxo pipefail
+
           wget -O abiword.src.tar.zst \
             https://mirror.msys2.org/mingw/sources/mingw-w64-abiword-3.0.8-1.src.tar.zst
+
           tar --zstd -xf abiword.src.tar.zst
+
           test -d mingw-w64-abiword
+
           cd mingw-w64-abiword
           tar -xf AbiWord-release-3.0.8.tar.bz2
 
       - name: Apply patches and prepare build
         run: |
           set -euxo pipefail
+
           cd mingw-w64-abiword/AbiWord-release-3.0.8
+
           shopt -s nullglob
+
           for p in ../*.patch; do
             case "$p" in
               *clang*) continue ;;
             esac
+
             echo "Applying $p"
             patch -Nbp1 -i "$p"
           done
+
           ./autogen-common.sh
+
+          # Supply the Libtool macros before regenerating configure.
+          /usr/bin/libtoolize --force --copy
+
           autoreconf -fiv
 
       - name: Configure i686 build
         run: |
           set -euxo pipefail
+
           cd mingw-w64-abiword/AbiWord-release-3.0.8
 
-          export PATH="/mingw32/bin:/ucrt64/bin:$PATH"
+          export PATH="/mingw32/bin:/ucrt64/bin:/usr/bin:$PATH"
+
           export CC=i686-w64-mingw32-gcc
           export CXX=i686-w64-mingw32-g++
           export AR=i686-w64-mingw32-ar
           export RANLIB=i686-w64-mingw32-ranlib
+          export NM=i686-w64-mingw32-nm
+          export STRIP=i686-w64-mingw32-strip
 
-          # These are x64 dependency paths, not i686 libraries.
-          export PKG_CONFIG_PATH="/ucrt64/lib/pkgconfig:/ucrt64/share/pkgconfig"
-          export PKG_CONFIG_LIBDIR="/ucrt64/lib/pkgconfig:/ucrt64/share/pkgconfig"
+          # Use target dependency metadata and headers.
+          export PKG_CONFIG_PATH="/mingw32/lib/pkgconfig:/mingw32/share/pkgconfig"
+          export PKG_CONFIG_LIBDIR="/mingw32/lib/pkgconfig:/mingw32/share/pkgconfig"
           export PKG_CONFIG="/ucrt64/bin/pkg-config"
 
           export CFLAGS="-DWIN32"
           export CXXFLAGS="-w -DWIN32"
+          export lt_cv_deplibs_check_method=pass_all
 
           mkdir -p build-UCRT64-i686
           cd build-UCRT64-i686
@@ -135,37 +185,44 @@ jobs:
       - name: Compile without linking
         run: |
           set -euxo pipefail
+
           cd mingw-w64-abiword/AbiWord-release-3.0.8/build-UCRT64-i686
 
-          export PATH="/mingw32/bin:/ucrt64/bin:$PATH"
+          export PATH="/mingw32/bin:/ucrt64/bin:/usr/bin:$PATH"
 
-          # Compile individual source files to object files.
-          # Do not run make all or make install.
-          while IFS= read -r -d '' source; do
-            object="${source%.*}.o"
-            echo "Compiling $source"
-            make -f Makefile "$object" || true
-          done < <(
-            find .. -type f \
-              \( -name '*.c' -o -name '*.cpp' -o -name '*.cc' -o -name '*.cxx' \) \
-              -print0
-          )
+          # Compile the configured project targets without executing
+          # the final executable/library link or installation targets.
+          make -j"$(nproc)" all-am \
+            AM_MAKEFLAGS=""
 
       - name: Collect build scripts and objects
         if: always()
         run: |
           set -euxo pipefail
+
           mkdir -p "$GITHUB_WORKSPACE/artifacts"
 
           if [ -d mingw-w64-abiword ]; then
-            cp -a mingw-w64-abiword "$GITHUB_WORKSPACE/artifacts/"
+            cp -a mingw-w64-abiword \
+              "$GITHUB_WORKSPACE/artifacts/"
           fi
 
-          cp -f abiword.src.tar.zst "$GITHUB_WORKSPACE/artifacts/" 2>/dev/null || true
+          for file in abiword.src.tar.zst \
+                      missing-packages.txt \
+                      failed-packages.txt; do
+            if [ -f "$file" ]; then
+              cp -f "$file" "$GITHUB_WORKSPACE/artifacts/"
+            fi
+          done
 
-          echo "Object files:"
+          echo "Compiled object files:"
           find "$GITHUB_WORKSPACE/artifacts" \
             -type f \( -name '*.o' -o -name '*.lo' \) -print
+
+          echo "Object count:"
+          find "$GITHUB_WORKSPACE/artifacts" \
+            -type f \( -name '*.o' -o -name '*.lo' \) |
+            wc -l
 
       - name: Upload build artifacts
         if: always()
@@ -174,3 +231,4 @@ jobs:
           name: abiword-i686-objects
           path: artifacts/
           if-no-files-found: error
+          retention-days: 7
