@@ -1,0 +1,73 @@
+
+name: Build AbiWord (MSYS2 UCRT64)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/abiword-ucrt64.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 120
+
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - name: Set up MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MSYS
+          update: true
+          install: >-
+            base-devel
+            msys2-devel
+            git
+            zstd
+            mingw-w64-ucrt-x86_64-toolchain
+
+      - name: Download source package
+        run: |
+          set -euo pipefail
+          mkdir -p abiword-pkg
+          curl -fL --retry 3 \
+            -o abiword.src.tar.zst \
+            https://mirror.msys2.org/mingw/sources/mingw-w64-abiword-3.0.8-1.src.tar.zst
+
+          tar --zstd -xf abiword.src.tar.zst \
+            -C abiword-pkg
+
+          test -f abiword-pkg/PKGBUILD
+          echo "Source package contents:"
+          ls -la abiword-pkg
+
+      - name: Build AbiWord for UCRT64
+        working-directory: abiword-pkg
+        run: |
+          set -euo pipefail
+
+          export MINGW_ARCH=ucrt64
+
+          makepkg-mingw \
+            --syncdeps \
+            --clean \
+            --force \
+            --log \
+            --noconfirm \
+            --noprogressbar
+
+      - name: Upload MSYS2 package
+        uses: actions/upload-artifact@v4
+        with:
+          name: abiword-3.0.8-ucrt64
+          path: |
+            abiword-pkg/*.pkg.tar.zst
+            abiword-pkg/*.log
+          if-no-files-found: error
+          retention-days: 14
