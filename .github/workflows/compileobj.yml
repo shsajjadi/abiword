@@ -1,0 +1,176 @@
+
+name: Build AbiWord i686 Objects
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          autocrlf: input
+
+      - name: Setup MSYS2 UCRT64
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            base-devel
+            git
+            wget
+            patch
+            bzip2
+            zstd
+            autoconf
+            automake
+            autoconf-archive
+            gettext
+            pkgconf
+            mingw-w64-ucrt-x86_64-toolchain
+            mingw-w64-i686-toolchain
+
+      - name: Verify toolchain
+        run: |
+          set -euxo pipefail
+          echo "MSYSTEM=$MSYSTEM"
+          echo "MINGW_PREFIX=$MINGW_PREFIX"
+          test "$MSYSTEM" = UCRT64
+          test -x /ucrt64/bin/gcc.exe
+          test -x /mingw32/bin/gcc.exe
+          /mingw32/bin/i686-w64-mingw32-gcc --version
+          make --version
+          pacman-conf --repo-list
+
+      - name: Install x64 build dependencies
+        run: |
+          set -euxo pipefail
+          packages=(
+            mingw-w64-ucrt-x86_64-asio
+            mingw-w64-ucrt-x86_64-boost
+            mingw-w64-ucrt-x86_64-enchant
+            mingw-w64-ucrt-x86_64-fribidi
+            mingw-w64-ucrt-x86_64-glib2
+            mingw-w64-ucrt-x86_64-libgcrypt
+            mingw-w64-ucrt-x86_64-libgda
+            mingw-w64-ucrt-x86_64-libgsf
+            mingw-w64-ucrt-x86_64-libical
+            mingw-w64-ucrt-x86_64-libjpeg-turbo
+            mingw-w64-ucrt-x86_64-libpng
+            mingw-w64-ucrt-x86_64-libxml2
+            mingw-w64-ucrt-x86_64-libxslt
+            mingw-w64-ucrt-x86_64-zlib
+          )
+          pacman -S --needed --noconfirm "${packages[@]}"
+
+      - name: Download and extract AbiWord source package
+        run: |
+          set -euxo pipefail
+          wget -O abiword.src.tar.zst \
+            https://mirror.msys2.org/mingw/sources/mingw-w64-abiword-3.0.8-1.src.tar.zst
+          tar --zstd -xf abiword.src.tar.zst
+          test -d mingw-w64-abiword
+          cd mingw-w64-abiword
+          tar -xf AbiWord-release-3.0.8.tar.bz2
+
+      - name: Apply patches and prepare build
+        run: |
+          set -euxo pipefail
+          cd mingw-w64-abiword/AbiWord-release-3.0.8
+          shopt -s nullglob
+          for p in ../*.patch; do
+            case "$p" in
+              *clang*) continue ;;
+            esac
+            echo "Applying $p"
+            patch -Nbp1 -i "$p"
+          done
+          ./autogen-common.sh
+          autoreconf -fiv
+
+      - name: Configure i686 build
+        run: |
+          set -euxo pipefail
+          cd mingw-w64-abiword/AbiWord-release-3.0.8
+
+          export PATH="/mingw32/bin:/ucrt64/bin:$PATH"
+          export CC=i686-w64-mingw32-gcc
+          export CXX=i686-w64-mingw32-g++
+          export AR=i686-w64-mingw32-ar
+          export RANLIB=i686-w64-mingw32-ranlib
+
+          # These are x64 dependency paths, not i686 libraries.
+          export PKG_CONFIG_PATH="/ucrt64/lib/pkgconfig:/ucrt64/share/pkgconfig"
+          export PKG_CONFIG_LIBDIR="/ucrt64/lib/pkgconfig:/ucrt64/share/pkgconfig"
+          export PKG_CONFIG="/ucrt64/bin/pkg-config"
+
+          export CFLAGS="-DWIN32"
+          export CXXFLAGS="-w -DWIN32"
+
+          mkdir -p build-UCRT64-i686
+          cd build-UCRT64-i686
+
+          ../configure \
+            --build="$(../config.guess)" \
+            --host=i686-w64-mingw32 \
+            --prefix=/mingw32 \
+            --enable-shared \
+            --enable-plugins \
+            --enable-clipart \
+            --enable-templates
+
+      - name: Compile without linking
+        run: |
+          set -euxo pipefail
+          cd mingw-w64-abiword/AbiWord-release-3.0.8/build-UCRT64-i686
+
+          export PATH="/mingw32/bin:/ucrt64/bin:$PATH"
+
+          # Compile individual source files to object files.
+          # Do not run make all or make install.
+          while IFS= read -r -d '' source; do
+            object="${source%.*}.o"
+            echo "Compiling $source"
+            make -f Makefile "$object" || true
+          done < <(
+            find .. -type f \
+              \( -name '*.c' -o -name '*.cpp' -o -name '*.cc' -o -name '*.cxx' \) \
+              -print0
+          )
+
+      - name: Collect build scripts and objects
+        if: always()
+        run: |
+          set -euxo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/artifacts"
+
+          if [ -d mingw-w64-abiword ]; then
+            cp -a mingw-w64-abiword "$GITHUB_WORKSPACE/artifacts/"
+          fi
+
+          cp -f abiword.src.tar.zst "$GITHUB_WORKSPACE/artifacts/" 2>/dev/null || true
+
+          echo "Object files:"
+          find "$GITHUB_WORKSPACE/artifacts" \
+            -type f \( -name '*.o' -o -name '*.lo' \) -print
+
+      - name: Upload build artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: abiword-i686-objects
+          path: artifacts/
+          if-no-files-found: error
