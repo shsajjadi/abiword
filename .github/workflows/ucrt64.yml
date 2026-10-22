@@ -4,8 +4,7 @@ name: Build AbiWord UCRT64
 on:
   workflow_dispatch:
   push:
-    paths:
-      - ".github/workflows/abiword-ucrt64.yml"
+    branches: [main]
 
 permissions:
   contents: read
