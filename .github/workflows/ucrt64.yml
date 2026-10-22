@@ -1,5 +1,5 @@
 
-name: Build AbiWord (MSYS2 UCRT64)
+name: Build AbiWord UCRT64
 
 on:
   workflow_dispatch:
@@ -29,30 +29,40 @@ jobs:
             base-devel
             msys2-devel
             git
+            curl
             zstd
             mingw-w64-ucrt-x86_64-toolchain
 
-      - name: Download source package
+      - name: Download and extract AbiWord source
         run: |
           set -euo pipefail
+
           mkdir -p abiword-pkg
+
           curl -fL --retry 3 \
             -o abiword.src.tar.zst \
             https://mirror.msys2.org/mingw/sources/mingw-w64-abiword-3.0.8-1.src.tar.zst
 
+          echo "Source archive contents:"
+          tar --zstd -tf abiword.src.tar.zst | head -80
+
           tar --zstd -xf abiword.src.tar.zst \
             -C abiword-pkg
 
-          test -f abiword-pkg/PKGBUILD
-          echo "Source package contents:"
-          ls -la abiword-pkg
+          echo "Extracted package files:"
+          find abiword-pkg -maxdepth 3 -type f
+
+          test -f abiword-pkg/mingw-w64-abiword/PKGBUILD
 
       - name: Build AbiWord for UCRT64
-        working-directory: abiword-pkg
+        working-directory: abiword-pkg/mingw-w64-abiword
         run: |
           set -euo pipefail
 
           export MINGW_ARCH=ucrt64
+
+          echo "Building AbiWord for UCRT64..."
+          echo "PKGBUILD: $PWD/PKGBUILD"
 
           makepkg-mingw \
             --syncdeps \
@@ -62,12 +72,12 @@ jobs:
             --noconfirm \
             --noprogressbar
 
-      - name: Upload MSYS2 package
+      - name: Upload built package
         uses: actions/upload-artifact@v4
         with:
           name: abiword-3.0.8-ucrt64
           path: |
-            abiword-pkg/*.pkg.tar.zst
-            abiword-pkg/*.log
+            abiword-pkg/mingw-w64-abiword/*.pkg.tar.zst
+            abiword-pkg/mingw-w64-abiword/*.log
           if-no-files-found: error
           retention-days: 14
