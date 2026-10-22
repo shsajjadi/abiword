@@ -53,12 +53,19 @@ jobs:
 
           test "$MSYSTEM" = UCRT64
           test -x /ucrt64/bin/gcc.exe
-          test -x /mingw32/bin/gcc.exe
-          test -x /usr/bin/libtoolize.exe
 
-          /mingw32/bin/i686-w64-mingw32-gcc --version
-          /mingw32/bin/i686-w64-mingw32-g++ --version
-          /usr/bin/libtoolize --version
+          command -v libtoolize
+          command -v autoreconf
+          command -v make
+
+          echo "Available i686 compiler:"
+          command -v i686-w64-mingw32-gcc
+          command -v i686-w64-mingw32-g++
+
+          i686-w64-mingw32-gcc --version
+          i686-w64-mingw32-g++ --version
+          libtoolize --version
+          autoreconf --version
           make --version
           pacman-conf --repo-list
 
@@ -83,32 +90,26 @@ jobs:
             mingw-w64-i686-zlib
           )
 
-          missing=()
-          failed=()
+          : > missing-packages.txt
+          : > failed-packages.txt
 
           for pkg in "${packages[@]}"; do
             echo "::group::Checking $pkg"
 
             if ! pacman -Si "$pkg" >/dev/null 2>&1; then
               echo "::warning::Package unavailable: $pkg"
-              missing+=("$pkg")
+              echo "$pkg" >> missing-packages.txt
             elif ! pacman -S --needed --noconfirm "$pkg"; then
-              echo "::warning::Installation failed: $pkg"
-              failed+=("$pkg")
+              echo "::warning::Could not install: $pkg"
+              echo "$pkg" >> failed-packages.txt
             else
-              echo "Installed or already present: $pkg"
+              echo "Installed: $pkg"
             fi
 
             echo "::endgroup::"
           done
 
-          printf '%s\n' "${missing[@]}" > missing-packages.txt
-          printf '%s\n' "${failed[@]}" > failed-packages.txt
-
-          echo "Unavailable packages: ${#missing[@]}"
-          echo "Failed installations: ${#failed[@]}"
-
-      - name: Download and extract AbiWord source package
+      - name: Download and extract AbiWord source
         run: |
           set -euxo pipefail
 
@@ -141,9 +142,7 @@ jobs:
 
           ./autogen-common.sh
 
-          # Supply the Libtool macros before regenerating configure.
-          /usr/bin/libtoolize --force --copy
-
+          libtoolize --force --copy
           autoreconf -fiv
 
       - name: Configure i686 build
@@ -152,8 +151,6 @@ jobs:
 
           cd mingw-w64-abiword/AbiWord-release-3.0.8
 
-          export PATH="/mingw32/bin:/ucrt64/bin:/usr/bin:$PATH"
-
           export CC=i686-w64-mingw32-gcc
           export CXX=i686-w64-mingw32-g++
           export AR=i686-w64-mingw32-ar
@@ -161,10 +158,9 @@ jobs:
           export NM=i686-w64-mingw32-nm
           export STRIP=i686-w64-mingw32-strip
 
-          # Use target dependency metadata and headers.
-          export PKG_CONFIG_PATH="/mingw32/lib/pkgconfig:/mingw32/share/pkgconfig"
-          export PKG_CONFIG_LIBDIR="/mingw32/lib/pkgconfig:/mingw32/share/pkgconfig"
-          export PKG_CONFIG="/ucrt64/bin/pkg-config"
+          export PKG_CONFIG=/ucrt64/bin/pkg-config
+          export PKG_CONFIG_PATH=/mingw32/lib/pkgconfig:/mingw32/share/pkgconfig
+          export PKG_CONFIG_LIBDIR=/mingw32/lib/pkgconfig:/mingw32/share/pkgconfig
 
           export CFLAGS="-DWIN32"
           export CXXFLAGS="-w -DWIN32"
@@ -182,20 +178,24 @@ jobs:
             --enable-clipart \
             --enable-templates
 
-      - name: Compile without linking
+      - name: Compile without final linking
         run: |
           set -euxo pipefail
 
           cd mingw-w64-abiword/AbiWord-release-3.0.8/build-UCRT64-i686
 
-          export PATH="/mingw32/bin:/ucrt64/bin:/usr/bin:$PATH"
+          # Build individual object prerequisites rather than the
+          # normal all/install targets.
+          export PATH="/mingw32/bin:/ucrt64/bin:$PATH"
 
-          # Compile the configured project targets without executing
-          # the final executable/library link or installation targets.
-          make -j"$(nproc)" all-am \
-            AM_MAKEFLAGS=""
+          echo "Configured compiler:"
+          grep -E '^(CC|CXX|AR|RANLIB|NM) =' Makefile || true
 
-      - name: Collect build scripts and objects
+          # Compile through the generated Makefiles.
+          # This avoids the normal top-level install step.
+          make -j"$(nproc)" all-am
+
+      - name: Collect build files and objects
         if: always()
         run: |
           set -euxo pipefail
@@ -203,26 +203,23 @@ jobs:
           mkdir -p "$GITHUB_WORKSPACE/artifacts"
 
           if [ -d mingw-w64-abiword ]; then
-            cp -a mingw-w64-abiword \
-              "$GITHUB_WORKSPACE/artifacts/"
+            cp -a mingw-w64-abiword "$GITHUB_WORKSPACE/artifacts/"
           fi
 
-          for file in abiword.src.tar.zst \
-                      missing-packages.txt \
-                      failed-packages.txt; do
+          for file in abiword.src.tar.zst missing-packages.txt failed-packages.txt; do
             if [ -f "$file" ]; then
               cp -f "$file" "$GITHUB_WORKSPACE/artifacts/"
             fi
           done
 
-          echo "Compiled object files:"
-          find "$GITHUB_WORKSPACE/artifacts" \
-            -type f \( -name '*.o' -o -name '*.lo' \) -print
-
           echo "Object count:"
           find "$GITHUB_WORKSPACE/artifacts" \
             -type f \( -name '*.o' -o -name '*.lo' \) |
             wc -l
+
+          find "$GITHUB_WORKSPACE/artifacts" \
+            -type f \( -name '*.o' -o -name '*.lo' \) |
+            head -100
 
       - name: Upload build artifacts
         if: always()
