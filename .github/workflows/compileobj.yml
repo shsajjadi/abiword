@@ -2,8 +2,7 @@
 name: Build AbiWord i686 Objects
 
 on:
-  push:
-    branches: [main]
+
   workflow_dispatch:
 
 permissions:
