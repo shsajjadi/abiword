@@ -205,6 +205,11 @@ jobs:
           find abiword-pkg -maxdepth 3 -type f
 
           test -f abiword-pkg/mingw-w64-abiword/PKGBUILD
+      
+      - name: Patch AbiWord PKGBUILD
+        working-directory: abiword-pkg/mingw-w64-abiword
+        run: |
+          sed -i '/\.\/autogen-common\.sh/i\  sed -i '\''s/AC_MSG_ERROR(bad value \$enableval for --enable-embedded)/AC_MSG_ERROR([bad value $enableval for --enable-embedded])/'\'' configure.ac' PKGBUILD
 
       - name: Build AbiWord for i686
         working-directory: abiword-pkg/mingw-w64-abiword
