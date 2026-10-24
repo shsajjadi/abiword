@@ -30,7 +30,15 @@ jobs:
             curl
             zstd
             mingw-w64-i686-toolchain
-
+            mingw-w64-i686-glib2
+            mingw-w64-i686-libjpeg-turbo
+            mingw-w64-i686-libpng
+            mingw-w64-i686-libxml2
+            mingw-w64-i686-libxslt
+            mingw-w64-i686-gettext-runtime
+            mingw-w64-i686-cc
+            mingw-w64-i686-autotools
+            
       - name: Download and extract additional MinGW32 packages
         run: |
           set -euo pipefail
@@ -102,6 +110,7 @@ jobs:
           echo "PKGBUILD: $PWD/PKGBUILD"
 
           makepkg-mingw \
+            --nodeps \
             --clean \
             --force \
             --log \
