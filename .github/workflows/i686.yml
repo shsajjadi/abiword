@@ -87,7 +87,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          export MINGW_ARCH=i686
+          export MINGW_ARCH=mingw32
 
           echo "Patching PKGBUILD architecture list..."
           sed -i \
