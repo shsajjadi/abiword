@@ -39,6 +39,13 @@ jobs:
             mingw-w64-i686-gettext-runtime
             mingw-w64-i686-cc
             mingw-w64-i686-autotools
+            mingw-w64-i686-pkgconf 
+            mingw-w64-i686-libtool 
+            mingw-w64-i686-autoconf-archive 
+            mingw-w64-i686-toolchain 
+            make 
+            autoconf 
+            automake            
 
       - name: Download and extract additional MinGW32 packages
         run: |
