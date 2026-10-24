@@ -103,7 +103,6 @@ jobs:
           set -euo pipefail
 
           export MINGW_ARCH=mingw32
-
           echo "Patching wv PKGBUILD architecture..."
           sed -i \
             "s/^mingw_arch=.*/mingw_arch=('mingw32')/" \
@@ -114,6 +113,9 @@ jobs:
           grep -q "^mingw_arch=('mingw32')$" PKGBUILD
 
           echo "Building wv for i686..."
+
+          export PKG_CONFIG_PATH="/mingw32/lib/pkgconfig:/mingw32/share/pkgconfig"
+          export PKG_CONFIG_LIBDIR="/mingw32/lib/pkgconfig:/mingw32/share/pkgconfig"
           makepkg-mingw \
             --nodeps \
             --clean \
@@ -231,6 +233,10 @@ jobs:
           grep -q -- '--disable-plugins' PKGBUILD
 
           echo "Building AbiWord for i686..."
+
+          export PKG_CONFIG_PATH="/mingw32/lib/pkgconfig:/mingw32/share/pkgconfig"
+          export PKG_CONFIG_LIBDIR="/mingw32/lib/pkgconfig:/mingw32/share/pkgconfig"
+
           makepkg-mingw \
             --nodeps \
             --clean \
