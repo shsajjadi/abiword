@@ -102,7 +102,6 @@ jobs:
           echo "PKGBUILD: $PWD/PKGBUILD"
 
           makepkg-mingw \
-            --syncdeps \
             --clean \
             --force \
             --log \
