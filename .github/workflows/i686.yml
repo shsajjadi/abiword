@@ -1,0 +1,115 @@
+name: Build AbiWord i686
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 120
+
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - name: Set up MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW32
+          update: true
+          install: >-
+            base-devel
+            msys2-devel
+            git
+            curl
+            zstd
+            mingw-w64-i686-toolchain
+
+      - name: Download and install additional MinGW32 packages
+        run: |
+          set -euo pipefail
+
+          mkdir -p extra-packages
+          cd extra-packages
+
+          base_url="https://repo.msys2.org/mingw/mingw32"
+
+          packages=(
+            mingw-w64-i686-asio-1.28.1-2-any.pkg.tar.zst
+            mingw-w64-i686-boost-1.90.0-3-any.pkg.tar.zst
+            mingw-w64-i686-enchant-2.6.5-1-any.pkg.tar.zst
+            mingw-w64-i686-fribidi-1.0.16-1-any.pkg.tar.zst
+            mingw-w64-i686-libgcrypt-1.12.2-2-any.pkg.tar.zst
+            mingw-w64-i686-libgda-5.2.10-1-any.pkg.tar.zst
+            mingw-w64-i686-libgsf-1.14.53-1-any.pkg.tar.zst
+            mingw-w64-i686-libical-3.0.17-1-any.pkg.tar.zst
+          )
+
+          for package in "${packages[@]}"; do
+            echo "Downloading ${package}"
+            curl -fL --retry 3 \
+              --retry-delay 2 \
+              -o "$package" \
+              "${base_url}/${package}"
+          done
+
+          echo "Installing downloaded packages and dependencies..."
+          pacman -U --noconfirm --needed \
+            "${packages[@]}"
+
+          echo "Verifying package installation..."
+          pacman -Q \
+            mingw-w64-i686-asio \
+            mingw-w64-i686-boost \
+            mingw-w64-i686-enchant \
+            mingw-w64-i686-fribidi \
+            mingw-w64-i686-libgcrypt \
+            mingw-w64-i686-libgda \
+            mingw-w64-i686-libgsf \
+            mingw-w64-i686-libical
+
+      - name: Download and extract AbiWord source
+        run: |
+          set -euo pipefail
+          mkdir -p abiword-pkg
+          curl -fL --retry 3 \
+            -o abiword.src.tar.zst \
+            https://mirror.msys2.org/mingw/sources/mingw-w64-abiword-3.0.8-1.src.tar.zst
+          echo "Source archive contents:"
+          tar --zstd -tf abiword.src.tar.zst | head -80
+          tar --zstd -xf abiword.src.tar.zst \
+            -C abiword-pkg
+          echo "Extracted package files:"
+          find abiword-pkg -maxdepth 3 -type f
+          test -f abiword-pkg/mingw-w64-abiword/PKGBUILD
+
+      - name: Build AbiWord for i686
+        working-directory: abiword-pkg/mingw-w64-abiword
+        run: |
+          set -euo pipefail
+          export MINGW_ARCH=i686
+          echo "Building AbiWord for i686..."
+          echo "PKGBUILD: $PWD/PKGBUILD"
+          makepkg-mingw \
+            --syncdeps \
+            --clean \
+            --force \
+            --log \
+            --noconfirm \
+            --noprogressbar
+
+      - name: Upload built package
+        uses: actions/upload-artifact@v4
+        with:
+          name: abiword-3.0.8-i686
+          path: |
+            abiword-pkg/mingw-w64-abiword/*.pkg.tar.zst
+            abiword-pkg/mingw-w64-abiword/*.log
+          if-no-files-found: error
+          retention-days: 14
