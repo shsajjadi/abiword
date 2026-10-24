@@ -75,6 +75,8 @@ jobs:
           done
 
           echo "All additional packages extracted."
+          echo "Checking libgsf files..."
+          find /mingw32 -iname '*gsf*.pc' -o -iname '*gsf*.dll.a'
 
       - name: Download and extract wv source
         run: |
@@ -116,6 +118,11 @@ jobs:
 
           export PKG_CONFIG_PATH="/mingw32/lib/pkgconfig:/mingw32/share/pkgconfig"
           export PKG_CONFIG_LIBDIR="/mingw32/lib/pkgconfig:/mingw32/share/pkgconfig"
+
+          echo "Checking libgsf with pkg-config..."
+          pkg-config --modversion libgsf-1
+          pkg-config --cflags --libs libgsf-1
+
           makepkg-mingw \
             --nodeps \
             --clean \
