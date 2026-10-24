@@ -91,12 +91,12 @@ jobs:
 
           echo "Patching PKGBUILD architecture list..."
           sed -i \
-            "s/^mingw_arch=('ucrt64' 'clang64' 'clangarm64')/mingw_arch=('i686')/" \
+            "s/^mingw_arch=('ucrt64' 'clang64' 'clangarm64')/mingw_arch=('mingw32')/" \
             PKGBUILD
 
           echo "Checking patched architecture:"
           grep -n '^mingw_arch=' PKGBUILD
-          grep -q "^mingw_arch=('i686')$" PKGBUILD
+          grep -q "^mingw_arch=('mingw32')$" PKGBUILD
 
           echo "Building AbiWord for i686..."
           echo "PKGBUILD: $PWD/PKGBUILD"
