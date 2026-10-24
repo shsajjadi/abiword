@@ -31,7 +31,7 @@ jobs:
             zstd
             mingw-w64-i686-toolchain
 
-      - name: Download and install additional MinGW32 packages
+      - name: Download and extract additional MinGW32 packages
         run: |
           set -euo pipefail
 
@@ -57,22 +57,15 @@ jobs:
               --retry-delay 2 \
               -o "$package" \
               "${base_url}/${package}"
+
+            echo "Extracting ${package} into /mingw32"
+            tar --zstd -xf "$package" \
+              -C /mingw32 \
+              --no-same-owner \
+              --no-same-permissions
           done
 
-          echo "Installing downloaded packages and dependencies..."
-          pacman -U --noconfirm --needed \
-            "${packages[@]}"
-
-          echo "Verifying package installation..."
-          pacman -Q \
-            mingw-w64-i686-asio \
-            mingw-w64-i686-boost \
-            mingw-w64-i686-enchant \
-            mingw-w64-i686-fribidi \
-            mingw-w64-i686-libgcrypt \
-            mingw-w64-i686-libgda \
-            mingw-w64-i686-libgsf \
-            mingw-w64-i686-libical
+          echo "All packages downloaded and extracted."
 
       - name: Download and extract AbiWord source
         run: |
