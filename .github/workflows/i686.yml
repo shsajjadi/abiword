@@ -68,10 +68,11 @@ jobs:
               "${base_url}/${package}"
 
             echo "Extracting ${package} into /mingw32"
-            tar --zstd -xf "$package" \
-              -C /mingw32 \
-              --no-same-owner \
-              --no-same-permissions
+          tar --zstd -xf "$package" \
+            -C /mingw32 \
+            --strip-components=1 \
+            --no-same-owner \
+            --no-same-permissions
           done
 
           echo "All additional packages extracted."
@@ -155,6 +156,7 @@ jobs:
               *.pkg.tar.zst)
                 tar --zstd -xf "$package" \
                   -C /mingw32 \
+                  --strip-components=1 \
                   --no-same-owner \
                   --no-same-permissions
                 ;;
