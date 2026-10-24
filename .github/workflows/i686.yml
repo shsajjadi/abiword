@@ -1,3 +1,4 @@
+
 name: Build AbiWord i686
 
 on:
@@ -38,7 +39,7 @@ jobs:
             mingw-w64-i686-gettext-runtime
             mingw-w64-i686-cc
             mingw-w64-i686-autotools
-            
+
       - name: Download and extract additional MinGW32 packages
         run: |
           set -euo pipefail
@@ -73,21 +74,125 @@ jobs:
               --no-same-permissions
           done
 
-          echo "All packages downloaded and extracted."
+          echo "All additional packages extracted."
+
+      - name: Download and extract wv source
+        run: |
+          set -euo pipefail
+
+          mkdir -p wv-pkg
+
+          curl -fL --retry 3 \
+            --retry-delay 2 \
+            -o wv.src.tar.zst \
+            https://mirror.msys2.org/mingw/sources/mingw-w64-wv-1.2.9-4.src.tar.zst
+
+          echo "wv source archive contents:"
+          tar --zstd -tf wv.src.tar.zst | head -80
+
+          tar --zstd -xf wv.src.tar.zst -C wv-pkg
+
+          echo "Extracted wv package files:"
+          find wv-pkg -maxdepth 3 -type f
+
+          test -f wv-pkg/mingw-w64-wv/PKGBUILD
+
+      - name: Build wv for i686
+        working-directory: wv-pkg/mingw-w64-wv
+        run: |
+          set -euo pipefail
+
+          export MINGW_ARCH=mingw32
+
+          echo "Patching wv PKGBUILD architecture..."
+          sed -i \
+            "s/^mingw_arch=.*/mingw_arch=('mingw32')/" \
+            PKGBUILD
+
+          echo "Checking wv architecture:"
+          grep -n '^mingw_arch=' PKGBUILD
+          grep -q "^mingw_arch=('mingw32')$" PKGBUILD
+
+          echo "Building wv for i686..."
+          makepkg-mingw \
+            --nodeps \
+            --clean \
+            --force \
+            --log \
+            --noconfirm \
+            --noprogressbar
+
+          echo "Built wv package archives:"
+          find . -maxdepth 1 -type f -name '*.pkg.tar.*'
+
+      - name: Extract built wv into MinGW32
+        working-directory: wv-pkg/mingw-w64-wv
+        run: |
+          set -euo pipefail
+
+          shopt -s nullglob
+          packages=(mingw-w64-i686-wv-*.pkg.tar.*)
+
+          if (( ${#packages[@]} == 0 )); then
+            echo "ERROR: No i686 wv package archive found."
+            find . -maxdepth 1 -type f -name '*.pkg.tar.*'
+            exit 1
+          fi
+
+          for package in "${packages[@]}"; do
+            echo "Extracting ${package} into /mingw32"
+
+            case "$package" in
+              *.pkg.tar.zst)
+                tar --zstd -xf "$package" \
+                  -C /mingw32 \
+                  --no-same-owner \
+                  --no-same-permissions
+                ;;
+              *.pkg.tar.xz)
+                tar -xJf "$package" \
+                  -C /mingw32 \
+                  --no-same-owner \
+                  --no-same-permissions
+                ;;
+              *.pkg.tar.gz)
+                tar -xzf "$package" \
+                  -C /mingw32 \
+                  --no-same-owner \
+                  --no-same-permissions
+                ;;
+              *)
+                echo "ERROR: Unsupported package format: $package"
+                exit 1
+                ;;
+            esac
+          done
+
+          echo "wv extracted into /mingw32"
+
+          find /mingw32/include -maxdepth 2 -iname '*wv*' -print
+          find /mingw32/lib -maxdepth 2 -iname '*wv*' -print
 
       - name: Download and extract AbiWord source
         run: |
           set -euo pipefail
+
           mkdir -p abiword-pkg
+
           curl -fL --retry 3 \
+            --retry-delay 2 \
             -o abiword.src.tar.zst \
             https://mirror.msys2.org/mingw/sources/mingw-w64-abiword-3.0.8-1.src.tar.zst
-          echo "Source archive contents:"
+
+          echo "AbiWord source archive contents:"
           tar --zstd -tf abiword.src.tar.zst | head -80
+
           tar --zstd -xf abiword.src.tar.zst \
             -C abiword-pkg
-          echo "Extracted package files:"
+
+          echo "Extracted AbiWord package files:"
           find abiword-pkg -maxdepth 3 -type f
+
           test -f abiword-pkg/mingw-w64-abiword/PKGBUILD
 
       - name: Build AbiWord for i686
@@ -97,7 +202,7 @@ jobs:
 
           export MINGW_ARCH=mingw32
 
-          echo "Patching PKGBUILD architecture list..."
+          echo "Patching AbiWord PKGBUILD architecture..."
           sed -i \
             "s/^mingw_arch=('ucrt64' 'clang64' 'clangarm64')/mingw_arch=('mingw32')/" \
             PKGBUILD
@@ -106,9 +211,26 @@ jobs:
           grep -n '^mingw_arch=' PKGBUILD
           grep -q "^mingw_arch=('mingw32')$" PKGBUILD
 
-          echo "Building AbiWord for i686..."
-          echo "PKGBUILD: $PWD/PKGBUILD"
+          echo "Patching AbiWord plugin configuration..."
 
+          # Replace --enable-plugins with --disable-default-plugins.
+          sed -i \
+            '/^[[:space:]]*--enable-plugins[[:space:]]*\\$/c\    --disable-default-plugins \\' \
+            PKGBUILD
+
+          # Add --disable-plugins after --disable-default-plugins.
+          sed -i \
+            '/^[[:space:]]*--disable-default-plugins[[:space:]]*\\$/a\    --disable-plugins \\' \
+            PKGBUILD
+
+          echo "Checking plugin options:"
+          grep -nE -- '--(enable-plugins|disable-default-plugins|disable-plugins)' PKGBUILD
+
+          ! grep -q -- '--enable-plugins' PKGBUILD
+          grep -q -- '--disable-default-plugins' PKGBUILD
+          grep -q -- '--disable-plugins' PKGBUILD
+
+          echo "Building AbiWord for i686..."
           makepkg-mingw \
             --nodeps \
             --clean \
@@ -117,13 +239,15 @@ jobs:
             --noconfirm \
             --noprogressbar
 
+          echo "Built AbiWord package archives:"
+          find . -maxdepth 1 -type f -name '*.pkg.tar.*'
 
-      - name: Upload built package
+      - name: Upload built packages
         uses: actions/upload-artifact@v4
         with:
-          name: abiword-3.0.8-i686
+          name: abiword-wv-i686
           path: |
-            abiword-pkg/mingw-w64-abiword/*.pkg.tar.zst
-            abiword-pkg/mingw-w64-abiword/*.log
+            wv-pkg/mingw-w64-wv/*.pkg.tar.*
+            abiword-pkg/mingw-w64-abiword/*.pkg.tar.*
           if-no-files-found: error
-          retention-days: 14
+          compression-level: 6
